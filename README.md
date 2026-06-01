@@ -1,4 +1,4 @@
-# # When HTTP 402 Meets the Blockchain: Risks on Emerging x402 Payments
+# When HTTP 402 Meets the Blockchain: Risks on Emerging x402 Payments
 
 This repo contains the **core code for x402scope**, including the **on-chain measurement code referenced in the paper** and **security rule-violation detection scripts**.
 It provides measurement scripts for collecting and analyzing x402-related on-chain data, plus security rule-violation checks. It does not include attack or exploit tooling.
