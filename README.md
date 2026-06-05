@@ -198,3 +198,8 @@ The artifact follows the release channels described in the paper's Open-Science 
 ## Sanitization Notice
 
 This public repository is the sanitized, non-sensitive release of the x402scope artifact. It intentionally omits sensitive validation records, exact evaluation target configurations, per-facilitator security-rule pass/fail matrices, HTTP and on-chain evidence logs, adjudication records, and exploit-enabling materials. These materials are provided separately through the restricted-access Zenodo record to support independent assessment while reducing the risk of abuse against live x402 payment infrastructure.
+
+
+## License
+
+The source code in this repository is released under the MIT License.
