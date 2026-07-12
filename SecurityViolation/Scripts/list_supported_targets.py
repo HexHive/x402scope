@@ -64,11 +64,11 @@ def _build_request(base: str) -> tuple[str, dict[str, str]]:
 
     if "api.thirdweb.com" in base:
         try:
-            from config import ThidWeb_Secret_key
+            from config import ThirdWeb_Secret_key
         except Exception:
-            ThidWeb_Secret_key = ""
-        if ThidWeb_Secret_key:
-            headers["x-secret-key"] = ThidWeb_Secret_key
+            ThirdWeb_Secret_key = ""
+        if ThirdWeb_Secret_key:
+            headers["x-secret-key"] = ThirdWeb_Secret_key
 
     return url, headers
 

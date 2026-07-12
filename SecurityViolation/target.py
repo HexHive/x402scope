@@ -89,7 +89,7 @@ FACILITATORS: Dict[str, FacilitatorTarget] = {
         pay_amount=0, # 1000
         threads=1,
         valid_after_offset=-60,
-        valid_before_offset=180, # 1 2 3 4 5 6 7 8
+        valid_before_offset=300, # 1 2 3 4 5 6 7 8
         description="Requires CDP API headers; configure in config.py.",
     ),
     #solana testnet
@@ -105,7 +105,7 @@ FACILITATORS: Dict[str, FacilitatorTarget] = {
         pay_amount=1000,
         threads=1,
         valid_after_offset=-60,
-        valid_before_offset=5,
+        valid_before_offset=300,
         description="Requires CDP API headers; configure in config.py.",
     ),
     #Solana mainnet
@@ -121,7 +121,7 @@ FACILITATORS: Dict[str, FacilitatorTarget] = {
         pay_amount=0,
         threads=1,
         valid_after_offset=-60,
-        valid_before_offset=5,
+        valid_before_offset=300,
         description="Requires CDP API headers; configure in config.py.",
     ),
 }

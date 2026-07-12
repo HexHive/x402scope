@@ -12,7 +12,7 @@ from simplebase import *
 import config
 from target import current_target
 from config import pk1,pk2,poor_pk
-from oracles import log_verify_result, _print_api_result
+from oracles import log_verify_result, _print_api_result, tee_run_log
 
 LOG_SEQ = 0
 PRINT_SEQ = 0
@@ -250,11 +250,11 @@ if "coinbase" in target.name:
     settle_url = facilitator_config["url"] + "/settle"
 elif "thirdweb" in target.name:
     try:
-        from config import ThidWeb_Secret_key
+        from config import ThirdWeb_Secret_key
     except Exception as exc:
-        raise SystemExit("thirdweb target requires ThidWeb_Secret_key in config.py") from exc
-    headers["x-secret-key"] = ThidWeb_Secret_key
-    settle_headers["x-secret-key"] = ThidWeb_Secret_key
+        raise SystemExit("thirdweb target requires ThirdWeb_Secret_key in config.py") from exc
+    headers["x-secret-key"] = ThirdWeb_Secret_key
+    settle_headers["x-secret-key"] = ThirdWeb_Secret_key
 
 if "codenut" in target.name:
     SCRIPT_DIR = Path(__file__).resolve().parent 
@@ -396,6 +396,7 @@ def run(target_name=None):
     print("############ Oracle: verify succeed -> SR1/SR2")
     print("############ Oracle: settle succeed -> SR4, and if verify false -> SR7")
     print("############ Oracle: new block -> SR5, and if verify false -> SR7")
+    ts = int(time.time())
     ######################################################
     # sanitized mutations
     #######################################################
@@ -417,6 +418,7 @@ def run(target_name=None):
     print("############ Oracle: verify succeed -> SR3")
     print("############ Oracle: settle succeed -> SR4, and if verify false -> SR7")
     print("############ Oracle: new block -> SR5, and if verify false -> SR7")
+    ts = int(time.time())
     ######################################################
     # sanitized mutations
     #######################################################
@@ -477,7 +479,8 @@ def run(target_name=None):
     # manually check if a new block has been created or reverted
 
 def main():
-    run()
+    with tee_run_log(Path(__file__).stem, target.name):
+        run()
 
 
 if __name__ == "__main__":

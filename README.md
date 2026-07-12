@@ -3,6 +3,10 @@
 This repo contains the **core code for x402scope**, including the **on-chain measurement code referenced in the paper** and **security rule-violation detection scripts**.
 It provides measurement scripts for collecting and analyzing x402-related on-chain data, plus security rule-violation checks. It does not include attack or exploit tooling.
 
+For artifact evaluation, evaluators should follow the fixed workflows and commands specified in this Appendix and download the restricted-access version from Zenodo. 
+The Appendix defines the version-specific AE workflow, while the repository README provides broader instructions for reuse, extension, and
+testing additional or updated facilitator deployments. 
+
 ## Repository Structure
 - `Measurement/`: Core scripts for blockchain data ingestion (ETL), database management, and statistical analysis.
 - `Measurement/paper_figdata/`: Scripts specifically tuned to generate the data points for Figures 3-6 and Tables 3-5 in the paper.
@@ -30,7 +34,7 @@ To reproduce the measurement results, you require access to high-performance RPC
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/HexHive/x402scope.git
+git clone <repository-url>
 cd x402scope
 
 # Create virtual environment
@@ -42,7 +46,7 @@ pip install -r requirements.txt
 ```
 
 ### Configuration
-1. Copy the template to a usable config file:
+1. Copy the template to a local configuration file:
 ```bash
 cp config.example.py config.py
 ```
@@ -51,13 +55,117 @@ cp config.example.py config.py
 * **Database**: Fill in `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_HOST`, and `MYSQL_DB`.
 * **RPC Endpoints**: Insert your Alchemy RPC urls for Base and Solana.
 * **Private Keys**: Provide your Base and Solana private keys for executing rule checks in `config.py`.
-* **Facilitators**: Coinbase and ThridWeb requires API keys to use their facilitator services.
+* **Facilitators**: the included template keeps Coinbase fields (`CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`) and `ThirdWeb_Secret_key`; leave unused credential fields blank.
 
 3. Copy/Link the `config.py` to `SecurityViolation` folder:
 
 ```
-ln -s config.py SecurityViolation/config.py
+cp config.py SecurityViolation/config.py
 ```
+
+### Recommended targets and test-account setup
+
+We recommend starting with the bounded Coinbase test targets instead of running the full facilitator list:
+
+| Target | Network | Recommended first test |
+|---|---|---|
+| `coinbase-test` | Base Sepolia / EVM | Start `server_app_v2.py`, then run `evmclient_v2.py` |
+| `coinbase-solanadev` | Solana Devnet | `solana_verify_settle_v2` |
+
+Test accounts are required. Do **not** commit private keys.
+
+1. **Generate EVM test accounts for Base Sepolia.**
+
+   Use an EVM wallet such as Rabby, MetaMask, or another compatible wallet to create/export the test-account private keys. For the full EVM verify/settle test, prepare:
+
+   - `pk1`: funded client/payer private key. For Base Sepolia-only tests, reviewers may use the shared deterministic test key `"1" * 64`, whose address is `0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A`, after funding it with testnet USDC/gas.
+   - `pk2`: merchant/server recipient private key
+   - `poor_pk`: unfunded or underfunded client private key used for negative checks
+
+   Export any private keys locally and place them only in your private `config.py`. The `"1" * 64` key is only for public testnet experiments and must not be used on mainnet.
+
+2. **Generate Solana Devnet test accounts.**
+
+   The Solana scripts expect base58-encoded private keys in `config.py`. Use the helper script to generate a keypair:
+
+   ```bash
+   python3 SecurityViolation/Scripts/generate_solana_keypair.py -o solana-server.json
+   ```
+
+   The command prints the Solana public address and the `Private key for config.py` value. It also writes a Solana CLI-style JSON byte-array key file to the `-o` path.
+
+   Generate the required Solana local keys and place the printed base58 private-key strings in `config.py`:
+
+   - `solpk`: funded client/payer private key
+   - `solpk_server`: merchant/server recipient private key
+   - `poor_pk_sol`: unfunded or underfunded client private key used for negative checks
+
+3. **Fund the test accounts.**
+
+   Use Circle's faucet to obtain testnet USDC:
+
+   - <https://faucet.circle.com/>
+   - choose **Ethereum Sepolia** for EVM test USDC used by the Base Sepolia flow
+   - choose **Solana Devnet** for Solana Devnet test USDC
+
+   If gas is needed, use the relevant network faucets:
+
+   - Base Sepolia gas: <https://www.alchemy.com/faucets/base-sepolia>
+   - Solana Devnet SOL: <https://faucet.solana.com/>
+
+4. **Create Coinbase CDP API credentials.**
+
+   Register at <https://portal.cdp.coinbase.com/> and create secret API keys. Put the generated values in your local `config.py`:
+
+   ```python
+   CDP_API_KEY_ID = "..."
+   CDP_API_KEY_SECRET = "..."
+   ```
+
+5. **Fill `config.py` and local target values.**
+
+   Fill the local keys, RPC endpoints, and Coinbase credentials in `config.py`, then copy it to `SecurityViolation/config.py` as shown above. Also set `pay_to_address` for the selected target in `SecurityViolation/target.py` to the reviewer-controlled merchant/recipient address:
+
+   - `coinbase-test`: EVM recipient address derived from `pk2`
+   - `coinbase-solanadev`: Solana recipient address derived from `solpk_server`
+
+6. **Run the read-only preflight check.**
+
+   Before running a state-changing security test, check the local environment
+   and selected target. This does not contact an RPC, facilitator, merchant,
+   or blockchain:
+
+   ```bash
+   python3 SecurityViolation/preflight_check.py -t coinbase-test
+   python3 SecurityViolation/preflight_check.py -t coinbase-solanadev
+   ```
+
+   The command reports missing dependencies, credentials, addresses, fee-payer
+   settings, authorization timing, and the expected CAIP-2 network. It returns
+   a non-zero exit status when a required item is missing. For reliable
+   verify/settle checks, set `valid_before_offset` to greater than 180 seconds;
+   the preflight check warns when it is below 180 seconds.
+
+   For the free-shopping attack, the reviewer should temporarily reduce
+   `valid_before_offset` to a small value (for example `8`) and vary it to find
+   the boundary where verify succeeds but settle fails. This short value is
+   intentional for the attack and should not be treated as the normal default.
+
+7. **Run tests one by one.**
+
+   For the current Coinbase CDP v2 endpoint, start with the v2 local merchant/client flow. Run the server in one terminal and the client in another terminal:
+
+   ```bash
+   python3 SecurityViolation/server_app_v2.py -t coinbase-test
+   python3 SecurityViolation/evmclient_v2.py -t coinbase-test
+   ```
+
+   Then run other direct checks as needed:
+
+   ```bash
+   python3 SecurityViolation/verify_settle_base_v2.py -t coinbase-test
+   python3 SecurityViolation/verify_settle_solanav2.py -t coinbase-solanadev
+   ```
 
 ## 3. Experiment Workflow
 
@@ -69,10 +177,11 @@ This section reproduces the detection of security rules described in the paper.
 - **Private keys**: `pk1` and `poor_pk` (test payer), `pk2` (recipient), `solpk` and `poor_pk_sol` (Solana payer), and `solpk_server` (recipient)
 - **API credentials**:
   - Coinbase: `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET` (for coinbase targets)
-  - Thirdweb: `ThidWeb_Secret_key` (for thirdweb targets)
+  - Thirdweb: `ThirdWeb_Secret_key` (only needed for thirdweb targets; keep it blank otherwise)
 
-2. **Define Targets**: Ensure `target.py` contains the facilitator metadata (Pay-to address, API endpoints).
-You may need to add or customize targets in `target.py` (FacilitatorTarget entries in FACILITATORS dict):
+2. **Define Targets**: Ensure `target.py` contains the facilitator metadata (API endpoints, network, amount, timing window, and local merchant settings).
+
+The target file provides facilitator metadata and local merchant settings. Merchant `pay_to_address` values are operator-provided test addresses: they are quick to generate and configure, are not intrinsic to x402scope, and are not required for inspecting the preserved evidence. To re-run checks, reviewers should insert their own merchant/test addresses. You may add or customize targets in `target.py` (FacilitatorTarget entries in `FACILITATORS`):
 
 ```python
 "custom-target": FacilitatorTarget(
@@ -81,7 +190,7 @@ You may need to add or customize targets in `target.py` (FacilitatorTarget entri
     merchant_base="http://127.0.0.1:8001",
     network="base",  # or "base-sepolia", "solana", "solana-devnet"
     price="$0.001",
-    pay_to_address="0x...",  # Merchant address
+    pay_to_address="0x...",  # Your merchant/test address
     pay_amount=1000,  # Amount in smallest unit
     threads=1,
     valid_after_offset=-60,
@@ -92,28 +201,74 @@ You may need to add or customize targets in `target.py` (FacilitatorTarget entri
 
 
 
-3. **Execute Detection**: Run the x402scope script against a specific target.
+3. **Execute Detection**: Run one x402scope test script against one specific target.
 
-You can use the unified runner:
+Because target configuration is facilitator-specific and may require different credentials, networks, fee-payer settings, and test-account balances, reviewers should **select one target and one test script at a time** rather than running all targets/tests automatically. The test definitions are listed in `SecurityViolation/tests.py`, but the recommended artifact-review workflow is to invoke the corresponding scripts directly.
+
+Example direct invocations:
+
 ```bash
-python3 SecurityViolation/run.py -t <target_facilitator>
+# Recommended first EVM/Base Sepolia Coinbase v2 flow:
+# terminal 1: local merchant server
+python3 SecurityViolation/server_app_v2.py -t coinbase-test
+
+# terminal 2: EVM client flow
+python3 SecurityViolation/evmclient_v2.py -t coinbase-test
+
+# Additional EVM/Base Sepolia Coinbase v2 checks
+python3 SecurityViolation/verify_settle_base_v2.py -t coinbase-test
+python3 SecurityViolation/erc1271testv2.py -t coinbase-test
+python3 SecurityViolation/erc6492testv2.py -t coinbase-test
+
+# Legacy/v1-compatible EVM checks for v1-compatible targets
+python3 SecurityViolation/verify_settle_base.py -t <v1_compatible_target>
+python3 SecurityViolation/erc1271test.py -t <v1_compatible_target>
+python3 SecurityViolation/erc6492test.py -t <v1_compatible_target>
+
+# Solana Devnet Coinbase v2 target
+python3 SecurityViolation/verify_settle_solanav2.py -t coinbase-solanadev
 ```
 
-Optional: run the basesupport matrix (pay_amount=0, valid_before_offset=1..10):
-```bash
-python3 SecurityViolation/run.py -t <target_facilitator> --support-matrix
-```
+Current security test cases:
 
-Run a specific subset of tests:
-```bash
-python3 SecurityViolation/run.py -t <target_facilitator> --tests evm_erc1271_test,evm_6492_test
-```
+| Test ID | Script | Chain / Scope | Purpose |
+|---|---|---|---|
+| `evm_verify_settle_base` | `verify_settle_base.py` | EVM | Base x402 verify/settle checks. |
+| `evm_verify_settle_base_v2` | `verify_settle_base_v2.py` | EVM, x402 v2 | x402 v2 verify/settle checks on EVM targets. |
+| `solana_verify_settle` | `verify_settle_solana.py` | Solana | Solana x402 verify/settle checks; requires a configured fee payer. |
+| `solana_verify_settle_v2` | `verify_settle_solanav2.py` | Solana, x402 v2 | x402 v2 verify/settle checks on Solana targets; requires a configured fee payer. |
+| `evm_6492_test` | `erc6492test.py` | EVM | ERC-6492 validation behavior test. |
+| `evm_6492_test_v2` | `erc6492testv2.py` | EVM, x402 v2 | ERC-6492 validation behavior test for x402 v2. |
+| `evm_erc1271_test_v2` | `erc1271testv2.py` | EVM, x402 v2 | ERC-1271 signature validation behavior test for x402 v2. |
+| `evm_erc1271_test` | `erc1271test.py` | EVM | ERC-1271 signature validation behavior test for legacy/v1-compatible targets. |
+| `evm_client_attack_v2` | `evmclient_v2.py` with `server_app_v2.py` | EVM client flow, x402 v2 | Recommended first Coinbase EVM flow; start `server_app_v2.py` separately before running `evmclient_v2.py`. |
+| `evm_client_attack` | `evmclient.py` with `server_app.py` | EVM client flow, legacy/v1 | Legacy client flow for v1-compatible targets. |
 
-Default tests are defined in `SecurityViolation/tests.py` (EVM/Solana verify+settle, ERC-1271, ERC-6492, and the EVM client flow).
+Supporting scripts:
 
-You can also run any test script directly:
+| Script | Role |
+|---|---|
+| `basesupport.py` | Optional EVM pre-check for basic facilitator support. |
+| `server_app_v2.py` | Local merchant server used by the x402 v2 EVM client-flow test. |
+| `server_app.py` | Local merchant server used by the legacy/v1 EVM client-flow test. |
+
+Direct-script template:
 ```bash
 python3 SecurityViolation/<script>.py -t <target_facilitator>
+```
+
+For the x402 v2 EVM client-flow test, run the local merchant server in one terminal, then run the client script in another terminal:
+
+```bash
+python3 SecurityViolation/server_app_v2.py -t <target_facilitator>
+python3 SecurityViolation/evmclient_v2.py -t <target_facilitator>
+```
+
+For legacy/v1-compatible targets, use:
+
+```bash
+python3 SecurityViolation/server_app.py -t <target_facilitator>
+python3 SecurityViolation/evmclient.py -t <target_facilitator>
 ```
 
 ### Part B: Empirical Measurement (Base)
@@ -169,17 +324,7 @@ mysql -h <host> -p < sol_stattable.sql
 
 ## 4. Reproducing Paper Results
 
-The following scripts in `Measurement/paper_figdata/` query the processed SQL tables to generate the exact data points used in the paper's figures and tables.
-
-| Paper Element | Description | Script Command |
-| :--- | :--- | :--- |
-| **Figure 3** | Growth of x402 transaction activity & volume | `python3 transaction_activity.py` |
-| **Figure 4** | Top-10 Facilitators by volume | `python3 top_facilitators.py` |
-| **Figure 5** | Gas consumption comparison (Base vs. Sol) | `python3 gas_consumption.py` <br> `python3 daily_gas_fee_trend.py` |
-| **Figure 6** | Revert reason distribution | `python3 revert_statistics.py` |
-| **Table 4** | Revert statistics summary | `python3 revert_statistics.py` |
-| **Table 5** | ATA Rent Events (Sponsor costs) | `python3 ATA_rent_events.py` |
-| **Table 6** | ATA Creation Abuse (Scale) | `python3 ATA_owner_distribution.py` |
+The figure/table reproduction scripts and their required database configuration are documented in [`Measurement/paper_figdata/README.md`](Measurement/paper_figdata/README.md). After completing the measurement workflows above and preparing the processed SQL tables, follow that directory-level README to generate the paper figures, tables, and intermediate CSVs.
 
 ## Notes
 * **API Limits**: The measurement scripts are optimized for commercial RPC providers (Alchemy). If using free-tier endpoints, you may need to adjust concurrency settings (e.g., `RPCSIZE`) in the scripts to avoid rate-limiting (HTTP 429).

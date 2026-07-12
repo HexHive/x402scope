@@ -9,7 +9,7 @@ from pathlib import Path
 from simplebase import *  
 import config
 from target import current_target
-from oracles import log_verify_result, _print_api_result
+from oracles import log_verify_result, _print_api_result, tee_run_log
 
 if not hasattr(config, "modify_sol_instructions"):
     config.modify_sol_instructions = lambda instructions, signargs: instructions
@@ -65,9 +65,9 @@ if not feepayer:
 headers = {}
 if "thirdweb" in target.name:
     try:
-        headers["x-secret-key"] = config.ThidWeb_Secret_key
+        headers["x-secret-key"] = config.ThirdWeb_Secret_key
     except Exception as exc:
-        raise SystemExit("thirdweb target requires ThidWeb_Secret_key in config.py") from exc
+        raise SystemExit("thirdweb target requires ThirdWeb_Secret_key in config.py") from exc
 
 os.environ.pop("X402_ADDEXTRASIGS", None)
 
@@ -210,7 +210,6 @@ def run(target_name=None):
     ######################################################
     # sanitized mutations
     #######################################################
-
     print(url)
     x = sess.post(url, json=data_mut, headers=headers)
     _print_api_result(x)
@@ -422,7 +421,6 @@ def run(target_name=None):
     print("############ 12. recenthash_test")
     print("############ Oracle: verify rejected")
     print("############ Oracle: settle rejected")
-    delay = int(os.getenv("SOLANA_RECENTHASH_DELAY", "120"))
     ######################################################
     # sanitized mutations
     #######################################################
@@ -439,7 +437,8 @@ def run(target_name=None):
     time.sleep(2 + random.uniform(0, 0.5))
 
 def main():
-    run()
+    with tee_run_log(Path(__file__).stem, target.name):
+        run()
 
 
 if __name__ == "__main__":

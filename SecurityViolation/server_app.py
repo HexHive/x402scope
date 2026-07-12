@@ -39,9 +39,9 @@ def _build_facilitator_config(target):
     # Thirdweb facilitator uses x-secret-key header
     if "thirdweb" in target.name:
         try:
-            secret = config.ThidWeb_Secret_key
+            secret = config.ThirdWeb_Secret_key
         except Exception as exc:
-            raise SystemExit("Thirdweb target requires ThidWeb_Secret_key in config.py") from exc
+            raise SystemExit("Thirdweb target requires ThirdWeb_Secret_key in config.py") from exc
 
         async def _headers():
             return {

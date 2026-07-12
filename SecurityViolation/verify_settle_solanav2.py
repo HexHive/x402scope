@@ -9,7 +9,7 @@ from pathlib import Path
 from simplebase import *  
 import config
 from target import current_target
-from oracles import log_verify_result, _print_api_result
+from oracles import log_verify_result, _print_api_result, tee_run_log
 
 if not hasattr(config, "modify_sol_instructions"):
     config.modify_sol_instructions = lambda instructions, signargs: instructions
@@ -36,11 +36,13 @@ def _resolve_solana_network(chain_name: str):
     if "devnet" in chain_name:
         return {
             "chain": "solana-devnet",
+            "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
             "rpc": "https://api.devnet.solana.com",
             "usdc": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
         }
     return {
         "chain": "solana",
+        "network": "solana:5eykt4UsF8P8NJdTREpY1vzqKqZKvdp",
         "rpc": "https://api.mainnet-beta.solana.com",
         "usdc": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     }
@@ -49,6 +51,7 @@ def _resolve_solana_network(chain_name: str):
 target = current_target(_resolve_target_name())
 chain_cfg = _resolve_solana_network(target.chain_name or target.network)
 CHAINNAME = chain_cfg["chain"]
+NETWORK = chain_cfg["network"]
 RPC = chain_cfg["rpc"]
 USDC = chain_cfg["usdc"]
 
@@ -65,9 +68,9 @@ if not feepayer:
 headers = {}
 if "thirdweb" in target.name:
     try:
-        headers["x-secret-key"] = config.ThidWeb_Secret_key
+        headers["x-secret-key"] = config.ThirdWeb_Secret_key
     except Exception as exc:
-        raise SystemExit("thirdweb target requires ThidWeb_Secret_key in config.py") from exc
+        raise SystemExit("thirdweb target requires ThirdWeb_Secret_key in config.py") from exc
 
 os.environ.pop("X402_ADDEXTRASIGS", None)
 
@@ -129,7 +132,7 @@ def _build_solana_v2_payload(
         stx = stx_override
     requirements = {
         "scheme": "exact",
-        "network": CHAINNAME,
+        "network": NETWORK,
         "asset": USDC,
         "amount": str(amount),
         "payTo": pay_to,
@@ -197,7 +200,7 @@ def run(target_name=None):
     #######################################################
     x = sess.post(url, json=data_mut, headers=headers)
     _print_api_result(x)
-    log_verify_result(target, url, headers, data_mut, x, payment_payload, include_seq=True, schema="solana")
+    log_verify_result(target, url, headers, data_mut, x, payment_payload)
     time.sleep(2 + random.uniform(0, 0.5))
 
     print(settle_url)
@@ -299,7 +302,6 @@ def run(target_name=None):
     print("############ Oracle: new block -> SR5, and if verify false -> SR7")
     from solders.keypair import Keypair
 
-    poor_pk = Keypair().to_base58_string()
     ######################################################
     # sanitized mutations
     #######################################################
@@ -360,7 +362,7 @@ def run(target_name=None):
     print("############ high_gas_test_limit")
     print("############ Oracle: verify rejected")
     print("############ Oracle: settle rejected")
-    p######################################################
+    ######################################################
     # sanitized mutations
     #######################################################
     print(url)
@@ -402,7 +404,6 @@ def run(target_name=None):
     print("############ recenthash_test")
     print("############ Oracle: verify rejected")
     print("############ Oracle: settle rejected")
-    delay = int(os.getenv("SOLANA_RECENTHASH_DELAY", "120"))
     ######################################################
     # sanitized mutations
     #######################################################
@@ -445,7 +446,8 @@ def run(target_name=None):
     time.sleep(2 + random.uniform(0, 0.5))
 
 def main():
-    run()
+    with tee_run_log(Path(__file__).stem, target.name):
+        run()
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from simplebase import *
 import config
 from target import current_target
 from config import pk1, pk2
-from oracles import log_verify_result, _print_api_result
+from oracles import log_verify_result, _print_api_result, tee_run_log
 
 
 def _resolve_target_name() -> str:
@@ -67,12 +67,7 @@ if chain_key not in CHAIN_PRESETS:
 chain_cfg = CHAIN_PRESETS[chain_key]
 
 chainid = chain_cfg["chainid"]
-CHAINNAME = target.network  # network in header must match server requirements
-if "daydreams" in target.name:
-    if CHAINNAME == "base-sepolia":
-        CHAINNAME = "eip155:84532"
-    elif CHAINNAME == "base":
-        CHAINNAME = "eip155:8453"
+CHAINNAME = f"eip155:{chainid}"  # x402 v2 uses CAIP-2 network identifiers
 
 USDC = chain_cfg["usdc"]
 USDC_version = chain_cfg["usdc_version"]
@@ -205,11 +200,11 @@ if "coinbase" in target.name:
     settle_url = facilitator_config["url"] + "/settle"
 elif "thirdweb" in target.name:
     try:
-        from config import ThidWeb_Secret_key
+        from config import ThirdWeb_Secret_key
     except Exception as exc:
-        raise SystemExit("thirdweb target requires ThidWeb_Secret_key in config.py") from exc
-    headers["x-secret-key"] = ThidWeb_Secret_key
-    settle_headers["x-secret-key"] = ThidWeb_Secret_key
+        raise SystemExit("thirdweb target requires ThirdWeb_Secret_key in config.py") from exc
+    headers["x-secret-key"] = ThirdWeb_Secret_key
+    settle_headers["x-secret-key"] = ThirdWeb_Secret_key
 
 if "codenut" in target.name:
     SCRIPT_DIR = Path(__file__).resolve().parent
@@ -347,7 +342,6 @@ def run(target_name=None):
     print("############ Oracle: verify succeed -> SR1/SR2")
     print("############ Oracle: settle succeed -> SR4, and if verify false -> SR7")
     print("############ Oracle: new block -> SR5, and if verify false -> SR7")
-    data_mut = copy.deepcopy(data)
     ######################################################
     # sanitized mutations
     #######################################################
@@ -368,7 +362,8 @@ def run(target_name=None):
     print("############ expired_validbefore_test")
     print("############ Oracle: verify succeed -> SR3")
     print("############ Oracle: settle succeed -> SR4, and if verify false -> SR7")
-    print("############ Oracle: new block -> SR5, and if verify false -> SR7")
+    print("############ Oracle: new block -> SR5, and if verify false -> SR7")、
+    ts = int(time.time())
     ######################################################
     # sanitized mutations
     #######################################################
@@ -390,6 +385,7 @@ def run(target_name=None):
     print("############ Oracle: verify succeed -> SR3")
     print("############ Oracle: settle succeed -> SR4, and if verify false -> SR7")
     print("############ Oracle: new block -> SR5, and if verify false -> SR7")
+    ts = int(time.time())
     ######################################################
     # sanitized mutations
     #######################################################
@@ -427,7 +423,8 @@ def run(target_name=None):
     time.sleep(2 + random.uniform(0, 0.5))
 
 def main():
-    run()
+    with tee_run_log(Path(__file__).stem, target.name):
+        run()
 
 
 if __name__ == "__main__":

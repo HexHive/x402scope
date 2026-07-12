@@ -1432,7 +1432,6 @@ def sol_maketx_createNonceAccount(endpoint, pk, rent_value=1447680, needstx=Fals
     from solders.hash import Hash
     from solders.keypair import Keypair
     from solders.system_program import create_nonce_account
-    from solana.transaction import Transaction
     from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
     sender = Keypair.from_base58_string(pk)
     nonceacc = Keypair()
@@ -1510,7 +1509,6 @@ def sol_maketx(endpoint, instructions, pk, nonceacc=None, noncevalue=None, needs
     from solders.pubkey import Pubkey
     from solders.system_program import AdvanceNonceAccountParams, advance_nonce_account
     from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
-    from solana.transaction import Transaction
     from solders.instruction import AccountMeta, Instruction
     from solders.message import MessageV0, to_bytes_versioned
     from solders.transaction import VersionedTransaction
@@ -1545,6 +1543,7 @@ def sol_maketx(endpoint, instructions, pk, nonceacc=None, noncevalue=None, needs
     
     # default false
     if viewonly:
+        from solana.transaction import Transaction
         transaction = Transaction(recent_blockhash=Hash.from_string(bh), instructions=instructions, fee_payer=feepayer)
         estimatex = sol_simulateTransaction(endpoint, base58.b58encode(transaction.serialize(verify_signatures=False)).decode())
         sys.estimatex = estimatex
@@ -1560,6 +1559,7 @@ def sol_maketx(endpoint, instructions, pk, nonceacc=None, noncevalue=None, needs
     
     # 
     if gasprice is None:
+        from solana.transaction import Transaction
         transaction = Transaction(recent_blockhash=Hash.from_string(bh), instructions=instructions, fee_payer=feepayer)
         m = transaction.compile_message()
         sys.m = m
@@ -1575,6 +1575,7 @@ def sol_maketx(endpoint, instructions, pk, nonceacc=None, noncevalue=None, needs
     if fee:
         print("[sol tx] priority fee:", fee, end=" ")
         instructions.append(set_compute_unit_price(fee))
+        from solana.transaction import Transaction
         transaction = Transaction(recent_blockhash=Hash.from_string(bh), instructions=instructions, fee_payer=feepayer)
     if gaslimit is None:
         estimatex = sol_simulateTransaction(endpoint, base58.b58encode(transaction.serialize(verify_signatures=False)).decode())
@@ -1612,6 +1613,7 @@ def sol_maketx(endpoint, instructions, pk, nonceacc=None, noncevalue=None, needs
         sys.tx = transaction
         stx = base58.b58encode(bytes(transaction)).decode()
     else:
+        from solana.transaction import Transaction
         transaction = Transaction(recent_blockhash=Hash.from_string(bh), instructions=instructions, fee_payer=sender.pubkey())
         signargs = [sender]
         if morekeys:

