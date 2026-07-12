@@ -1,5 +1,9 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from runsql import runsql
 
 def get_columns(table: str):

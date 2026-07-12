@@ -1,4 +1,4 @@
-from x402_solfetchtxs import *
+from solfetchtxs import *
 runsql("select 1")
 conn = thread_data.__dict__.get("conn")
 LIMITSIZE=1000
