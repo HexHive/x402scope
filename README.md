@@ -380,7 +380,7 @@ The figure/table reproduction scripts and their required database configuration 
 
 The artifact follows the release channels described in the paper's Open-Science section:
 
-1. **Public Zenodo record**: [Zenodo record 20328962](https://zenodo.org/records/20328962) contains the sanitized, non-sensitive public artifact, including the x402scope framework, configuration template, execution instructions, measurement code, MariaDB schema/query scripts, and figure/table regeneration code.
+1. **Public Zenodo record**: [Zenodo record 20328961](https://zenodo.org/records/20328961) contains the sanitized, non-sensitive public artifact, including the x402scope framework, configuration template, execution instructions, measurement code, MariaDB schema/query scripts, and figure/table regeneration code.
 2. **GitHub repository**: [HexHive/x402scope](https://github.com/HexHive/x402scope) mirrors the same non-sensitive public artifact and will be maintained long term.
 3. **Restricted-access Zenodo record**: [Zenodo record 20329071](https://zenodo.org/records/20329071) contains the full x402scope codebase and sensitive validation records for controlled access.
 
