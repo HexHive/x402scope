@@ -106,16 +106,189 @@ def _check_target(result: Result, target_name: str):
     return target
 
 
+def _rpc_call(result: Result, rpc_url: str, method: str, params: list):
+    try:
+        import requests
+
+        response = requests.post(
+            rpc_url,
+            json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+            timeout=15,
+        )
+        response.raise_for_status()
+        body = response.json()
+        if "error" in body:
+            raise RuntimeError(body["error"])
+        return body.get("result")
+    except Exception as exc:
+        result.fail(f"RPC check failed for {rpc_url}: {exc}")
+        return None
+
+
+def _evm_chain_config(network: str) -> dict | None:
+    return {
+        "base-sepolia": {
+            "rpc": "https://sepolia.base.org",
+            "usdc": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+        },
+        "base": {
+            "rpc": "https://mainnet.base.org",
+            "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        },
+    }.get(network)
+
+
+def _evm_address(private_key: str) -> str:
+    from eth_account import Account
+
+    return Account.from_key(private_key).address
+
+
+def _check_evm_balances(result: Result, target, config: object) -> None:
+    chain = _evm_chain_config(target.network.lower())
+    if chain is None:
+        result.warn(f"no EVM USDC balance preset for network {target.network}")
+        return
+
+    print(f"\nOn-chain EVM balance check: {target.network} (USDC, 6 decimals)")
+    accounts = (("pk1", "pk1"), ("pk2", "pk2"), ("poor_pk", "poor_pk"))
+    for label, config_name in accounts:
+        private_key = getattr(config, config_name, None)
+        if not _configured(private_key):
+            result.fail(f"cannot check {label}: config.{config_name} is missing")
+            continue
+        try:
+            address = _evm_address(private_key)
+        except Exception as exc:
+            result.fail(f"cannot derive {label} address: {exc}")
+            continue
+
+        calldata = "0x70a08231" + address[2:].lower().rjust(64, "0")
+        raw_balance = _rpc_call(
+            result,
+            chain["rpc"],
+            "eth_call",
+            [{"to": chain["usdc"], "data": calldata}, "latest"],
+        )
+        if raw_balance is None:
+            continue
+        try:
+            units = int(raw_balance, 16)
+        except (TypeError, ValueError) as exc:
+            result.fail(f"invalid USDC balance for {label}: {exc}")
+            continue
+        result.ok(f"{label} {address}: {units / 1_000_000:.6f} USDC")
+
+
+def _solana_public_key(private_key: str) -> str:
+    from solders.keypair import Keypair
+
+    return str(Keypair.from_base58_string(private_key).pubkey())
+
+
+def _check_solana_balances(result: Result, target, config: object) -> None:
+    devnet = "devnet" in (target.chain_name or target.network).lower()
+    rpc_url = "https://api.devnet.solana.com" if devnet else "https://api.mainnet-beta.solana.com"
+    mint = (
+        "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        if devnet
+        else "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    )
+    print(f"\nOn-chain Solana balance/ATA check: {'devnet' if devnet else 'mainnet'} (USDC)")
+
+    try:
+        from solders.pubkey import Pubkey
+        from solders.token.associated import get_associated_token_address
+    except Exception as exc:
+        result.fail(f"Solana ATA dependencies unavailable: {exc}")
+        return
+
+    accounts = (
+        ("solpk", "solpk"),
+        ("solpk_server", "solpk_server"),
+        ("poor_pk_sol", "poor_pk_sol"),
+    )
+    # Accept the spelling used in some local reviewer configurations.
+    if not _configured(getattr(config, "poor_pk_sol", None)) and _configured(
+        getattr(config, "poor_pk_pool", None)
+    ):
+        accounts = accounts[:-1] + (("poor_pk_pool", "poor_pk_pool"),)
+
+    mint_pubkey = Pubkey.from_string(mint)
+    for label, config_name in accounts:
+        private_key = getattr(config, config_name, None)
+        if not _configured(private_key):
+            result.fail(f"cannot check {label}: config.{config_name} is missing")
+            continue
+        try:
+            owner = Pubkey.from_string(_solana_public_key(private_key))
+            ata = get_associated_token_address(owner, mint_pubkey)
+        except Exception as exc:
+            result.fail(f"cannot derive {label} ATA: {exc}")
+            continue
+
+        native_balance = _rpc_call(result, rpc_url, "getBalance", [str(owner)])
+        if native_balance is not None:
+            try:
+                lamports = int(native_balance["value"])
+                result.ok(f"{label} {owner}: SOL balance={lamports / 1_000_000_000:.9f} SOL")
+            except (KeyError, TypeError, ValueError) as exc:
+                result.fail(f"invalid SOL balance for {label}: {exc}")
+
+        account_info = _rpc_call(
+            result,
+            rpc_url,
+            "getAccountInfo",
+            [str(ata), {"encoding": "jsonParsed"}],
+        )
+        if account_info is None:
+            continue
+        if account_info.get("value") is None:
+            result.warn(f"{label} {owner}: USDC ATA does not exist ({ata})")
+            continue
+
+        balance_info = _rpc_call(
+            result,
+            rpc_url,
+            "getTokenAccountBalance",
+            [str(ata)],
+        )
+        if balance_info is None:
+            continue
+        amount = balance_info.get("value", {}).get("uiAmountString")
+        result.ok(f"{label} {owner}: USDC ATA exists ({ata}), balance={amount} USDC")
+
+    if _configured(target.feepayer):
+        fee_payer_balance = _rpc_call(result, rpc_url, "getBalance", [target.feepayer])
+        if fee_payer_balance is not None:
+            try:
+                lamports = int(fee_payer_balance["value"])
+                result.ok(
+                    f"target.feepayer {target.feepayer}: "
+                    f"SOL balance={lamports / 1_000_000_000:.9f} SOL"
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                result.fail(f"invalid SOL balance for target.feepayer: {exc}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run read-only local checks before an x402scope security test."
     )
     parser.add_argument("-t", "--target", required=True, help="target name from SecurityViolation/target.py")
+    parser.add_argument(
+        "--check-balances",
+        action="store_true",
+        help="read USDC balances and Solana ATA state through the selected network RPC",
+    )
     args = parser.parse_args()
 
     result = Result()
     print(f"Preflight target: {args.target}")
-    print("Checks are local-only; no RPC, facilitator, merchant, or chain request is made.\n")
+    if args.check_balances:
+        print("Local checks plus read-only RPC balance/ATA checks; no transaction is sent.\n")
+    else:
+        print("Checks are local-only; no RPC, facilitator, merchant, or chain request is made.\n")
 
     if sys.version_info >= (3, 10):
         result.ok(f"Python version: {sys.version.split()[0]}")
@@ -175,6 +348,12 @@ def main() -> int:
         _check_config_value(result, config, "CDP_API_KEY_SECRET")
     elif facilitator_name == "thirdweb":
         _check_config_value(result, config, "ThirdWeb_Secret_key")
+
+    if args.check_balances:
+        if is_solana:
+            _check_solana_balances(result, target, config)
+        else:
+            _check_evm_balances(result, target, config)
 
     print(f"\nSummary: {result.errors} error(s), {result.warnings} warning(s)")
     if result.errors:

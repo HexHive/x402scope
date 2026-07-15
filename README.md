@@ -100,7 +100,7 @@ Test accounts are required. Do **not** commit private keys.
    - `solpk_server`: merchant/server recipient private key
    - `poor_pk_sol`: unfunded or underfunded client private key used for negative checks
 
-3. **Fund the test accounts.**
+3. **Fund the test accounts and initialize Solana token accounts.**
 
    Use Circle's faucet to obtain testnet USDC:
 
@@ -112,6 +112,34 @@ Test accounts are required. Do **not** commit private keys.
 
    - Base Sepolia gas: <https://www.alchemy.com/faucets/base-sepolia>
    - Solana Devnet SOL: <https://faucet.solana.com/>
+
+   Alternatively, request Devnet SOL directly with:
+
+   ```bash
+   python3 SecurityViolation/Scripts/fund_solana_devnet_sol.py \
+       --to <target-solana-public-address> \
+       --amount 1
+   ```
+
+   This helper requires no private key, waits for confirmation, and reports
+   the balance before and after the airdrop. The configured maximum per
+   request is 5 SOL. If a public RPC returns HTTP 429 because its faucet
+   quota is exhausted, wait and retry or pass another Devnet RPC with
+   `--rpc`.
+
+   If a Solana USDC ATA is missing, create it with:
+
+   ```bash
+   python3 SecurityViolation/Scripts/create_solana_usdc_ata.py \
+       --network solana-devnet \
+       --payer-key solpk \
+       --owner-key solpk
+   ```
+
+   The payer signs and pays the ATA rent. The helper is idempotent and does
+   not send a transaction when the ATA already exists. Use `--owner-address`
+   for an owner not listed in `SecurityViolation/config.py`, or `--yes` to
+   skip confirmation.
 
 4. **Create Coinbase CDP API credentials.**
 
@@ -139,6 +167,22 @@ Test accounts are required. Do **not** commit private keys.
    python3 SecurityViolation/preflight_check.py -t coinbase-test
    python3 SecurityViolation/preflight_check.py -t coinbase-solanadev
    ```
+
+   To additionally check the selected target's read-only on-chain balances,
+   add `--check-balances`. For Solana this includes native SOL balances, the
+   existence and balance of each owner's USDC associated token account (ATA),
+   and the configured fee payer's SOL balance:
+
+   ```bash
+   python3 SecurityViolation/preflight_check.py -t coinbase-test --check-balances
+   python3 SecurityViolation/preflight_check.py -t coinbase-solanadev --check-balances
+   ```
+
+   The EVM check reads `pk1`, `pk2`, and `poor_pk`. The Solana check reads
+   `solpk`, `solpk_server`, and `poor_pk_sol` (also accepting the local alias
+   `poor_pk_pool`). A missing ATA for the intentionally unfunded poor account
+   is reported as a warning. These checks use the selected network's public
+   RPC and never send a transaction.
 
    The command reports missing dependencies, credentials, addresses, fee-payer
    settings, authorization timing, and the expected CAIP-2 network. It returns
