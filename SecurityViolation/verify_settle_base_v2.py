@@ -362,7 +362,7 @@ def run(target_name=None):
     print("############ expired_validbefore_test")
     print("############ Oracle: verify succeed -> SR3")
     print("############ Oracle: settle succeed -> SR4, and if verify false -> SR7")
-    print("############ Oracle: new block -> SR5, and if verify false -> SR7")、
+    print("############ Oracle: new block -> SR5, and if verify false -> SR7")
     ts = int(time.time())
     ######################################################
     # sanitized mutations
