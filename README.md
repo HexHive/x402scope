@@ -186,11 +186,10 @@ Test accounts are required. Do **not** commit private keys.
    The command reports missing dependencies, credentials, addresses, fee-payer
    settings, authorization timing, and the expected CAIP-2 network. It returns
    a non-zero exit status when a required item is missing. For reliable
-   verify/settle checks, we recommend setting `valid_before_offset` to 300 seconds;
-   the preflight check warns when it is below 300 seconds.
+   verify/settle checks, we recommend that `valid_before_offset` should be greater than 180 seconds.
 
    For the free-shopping attack, the reviewer should temporarily reduce
-   `valid_before_offset` to a small value (for example `8`) and vary it to find
+   `valid_before_offset` to a small value (for example, `8`) and vary it to find
    the boundary where verify succeeds but settle fails. This short value is
    intentional for the attack and should not be treated as the normal default.
 
@@ -237,7 +236,7 @@ The target file provides facilitator metadata and local merchant settings. Merch
     pay_amount=1000,  # Amount in smallest unit
     threads=1,
     valid_after_offset=-60,
-    valid_before_offset=300,  # Recommended for normal verify/settle checks
+    valid_before_offset=300,  # Recommended >= 180 for normal verify/settle checks
     description="my facilitator.",
 )
 ```
