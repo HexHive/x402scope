@@ -9,7 +9,7 @@ testing additional or updated facilitator deployments.
 
 ## Repository Structure
 - `Measurement/`: Core scripts for blockchain data ingestion (ETL), database management, and statistical analysis.
-- `Measurement/paper_figdata/`: Scripts specifically tuned to generate the data points for Figures 3-6 and Tables 3-5 in the paper.
+- `Measurement/paper_figdata/`: Scripts specifically tuned to generate the data points for Figures and Tables in the paper.
 - `SecurityViolation/`: core code for x402scope for detecting and verifying security rule violations against live x402 facilitators.
 - `requirements.txt` Python dependencies.
 - `config.example.py`: Example template for configuration and API keys.
@@ -70,7 +70,7 @@ We recommend starting with the bounded Coinbase test targets instead of running 
 | Target | Network | Recommended first test |
 |---|---|---|
 | `coinbase-test` | Base Sepolia / EVM | Start `server_app_v2.py`, then run `evmclient_v2.py` |
-| `coinbase-solanadev` | Solana Devnet | `solana_verify_settle_v2` |
+| `coinbase-solanadev` | Solana Devnet | Run `verify_settle_solanav2.py` |
 
 Test accounts are required. Do **not** commit private keys.
 
@@ -160,8 +160,7 @@ Test accounts are required. Do **not** commit private keys.
 6. **Run the read-only preflight check.**
 
    Before running a state-changing security test, check the local environment
-   and selected target. This does not contact an RPC, facilitator, merchant,
-   or blockchain:
+   and selected target. 
 
    ```bash
    python3 SecurityViolation/preflight_check.py -t coinbase-test
@@ -187,8 +186,8 @@ Test accounts are required. Do **not** commit private keys.
    The command reports missing dependencies, credentials, addresses, fee-payer
    settings, authorization timing, and the expected CAIP-2 network. It returns
    a non-zero exit status when a required item is missing. For reliable
-   verify/settle checks, set `valid_before_offset` to greater than 180 seconds;
-   the preflight check warns when it is below 180 seconds.
+   verify/settle checks, we recommend setting `valid_before_offset` to 300 seconds;
+   the preflight check warns when it is below 300 seconds.
 
    For the free-shopping attack, the reviewer should temporarily reduce
    `valid_before_offset` to a small value (for example `8`) and vary it to find
@@ -238,7 +237,7 @@ The target file provides facilitator metadata and local merchant settings. Merch
     pay_amount=1000,  # Amount in smallest unit
     threads=1,
     valid_after_offset=-60,
-    valid_before_offset=180, # 1 2 3 4 5 6 7 8
+    valid_before_offset=300,  # Recommended for normal verify/settle checks
     description="my facilitator.",
 )
 ```
@@ -247,7 +246,7 @@ The target file provides facilitator metadata and local merchant settings. Merch
 
 3. **Execute Detection**: Run one x402scope test script against one specific target.
 
-Because target configuration is facilitator-specific and may require different credentials, networks, fee-payer settings, and test-account balances, reviewers should **select one target and one test script at a time** rather than running all targets/tests automatically. The test definitions are listed in `SecurityViolation/tests.py`, but the recommended artifact-review workflow is to invoke the corresponding scripts directly.
+Because target configuration is facilitator-specific and may require different credentials, networks, fee-payer settings, and test-account balances, reviewers should **select one target and one test script at a time**.
 
 Example direct invocations:
 
@@ -273,20 +272,21 @@ python3 SecurityViolation/erc6492test.py -t <v1_compatible_target>
 python3 SecurityViolation/verify_settle_solanav2.py -t coinbase-solanadev
 ```
 
-Current security test cases:
+Current security test scripts:
 
-| Test ID | Script | Chain / Scope | Purpose |
-|---|---|---|---|
-| `evm_verify_settle_base` | `verify_settle_base.py` | EVM | Base x402 verify/settle checks. |
-| `evm_verify_settle_base_v2` | `verify_settle_base_v2.py` | EVM, x402 v2 | x402 v2 verify/settle checks on EVM targets. |
-| `solana_verify_settle` | `verify_settle_solana.py` | Solana | Solana x402 verify/settle checks; requires a configured fee payer. |
-| `solana_verify_settle_v2` | `verify_settle_solanav2.py` | Solana, x402 v2 | x402 v2 verify/settle checks on Solana targets; requires a configured fee payer. |
-| `evm_6492_test` | `erc6492test.py` | EVM | ERC-6492 validation behavior test. |
-| `evm_6492_test_v2` | `erc6492testv2.py` | EVM, x402 v2 | ERC-6492 validation behavior test for x402 v2. |
-| `evm_erc1271_test_v2` | `erc1271testv2.py` | EVM, x402 v2 | ERC-1271 signature validation behavior test for x402 v2. |
-| `evm_erc1271_test` | `erc1271test.py` | EVM | ERC-1271 signature validation behavior test for legacy/v1-compatible targets. |
-| `evm_client_attack_v2` | `evmclient_v2.py` with `server_app_v2.py` | EVM client flow, x402 v2 | Recommended first Coinbase EVM flow; start `server_app_v2.py` separately before running `evmclient_v2.py`. |
-| `evm_client_attack` | `evmclient.py` with `server_app.py` | EVM client flow, legacy/v1 | Legacy client flow for v1-compatible targets. |
+| Script | Chain / Scope | Purpose |
+|---|---|---|
+| `verify_settle_base.py` | EVM, legacy/v1 | Verify/settle checks for legacy or v1-compatible EVM targets. |
+| `verify_settle_base_v2.py` | EVM, x402 v2 | Verify/settle checks for x402 v2 EVM targets. |
+| `verify_settle_solana.py` | Solana, legacy/v1 | Verify/settle checks for legacy or v1-compatible Solana targets; requires a configured fee payer. |
+| `verify_settle_solanav2.py` | Solana, x402 v2 | Verify/settle checks for x402 v2 Solana targets; requires a configured fee payer. |
+| `erc6492test.py` | EVM, legacy/v1 | ERC-6492 validation behavior test for legacy or v1-compatible targets. |
+| `erc6492testv2.py` | EVM, x402 v2 | ERC-6492 validation behavior test for x402 v2 targets. |
+| `erc1271test.py` | EVM, legacy/v1 | ERC-1271 signature-validation behavior test for legacy or v1-compatible targets. |
+| `erc1271testv2.py` | EVM, x402 v2 | ERC-1271 signature-validation behavior test for x402 v2 targets. |
+| `evmclient.py` with `server_app.py` | EVM client flow, legacy/v1 | Legacy client-flow test; start `server_app.py` before running `evmclient.py`. |
+| `evmclient_v2.py` with `server_app_v2.py` | EVM client flow, x402 v2 | Recommended Coinbase EVM client-flow test; start `server_app_v2.py` before running `evmclient_v2.py`. |
+
 
 Supporting scripts:
 
@@ -382,7 +382,7 @@ The artifact follows the release channels described in the paper's Open-Science 
 
 1. **Public Zenodo record**: [Zenodo record 20328961](https://zenodo.org/records/20328961) contains the sanitized, non-sensitive public artifact, including the x402scope framework, configuration template, execution instructions, measurement code, MariaDB schema/query scripts, and figure/table regeneration code.
 2. **GitHub repository**: [HexHive/x402scope](https://github.com/HexHive/x402scope) mirrors the same non-sensitive public artifact and will be maintained long term.
-3. **Restricted-access Zenodo record**: [Zenodo record 20329071](https://zenodo.org/records/20329071) contains the full x402scope codebase and sensitive validation records for controlled access.
+3. **Restricted-access Zenodo record**: [Zenodo record 20329070](https://zenodo.org/records/20329070) contains the full x402scope codebase and sensitive validation records for controlled access.
 
 ## Sanitization Notice
 
